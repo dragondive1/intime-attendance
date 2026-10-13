@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة العامل - نظام الحضور</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Cairo', sans-serif; }
+    body { background: #f0f4f8; }
+    .header-bg { background: linear-gradient(135deg, #1e3a5f 0%, #0f2340 100%); }
+    .btn-checkin {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      box-shadow: 0 8px 30px rgba(22,163,74,0.4);
+      transition: all 0.3s ease;
+    }
+    .btn-checkin:hover { transform: scale(1.03); box-shadow: 0 12px 40px rgba(22,163,74,0.5); }
+    .btn-checkout {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 8px 30px rgba(239,68,68,0.4);
+      transition: all 0.3s ease;
+    }
+    .btn-checkout:hover { transform: scale(1.03); box-shadow: 0 12px 40px rgba(239,68,68,0.5); }
+    .btn-disabled { background: #9ca3af !important; box-shadow: none !important; cursor: not-allowed; }
+    .gps-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .gps-on { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 1.5s infinite; }
+    .gps-off { background: #ef4444; }
+    .gps-loading { background: #f97316; animation: blink 0.8s infinite; }
+    @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
+    #toast {
+      transition: all 0.3s ease;
+      transform: translateY(-20px); opacity:0; pointer-events:none;
+    }
+    #toast.show { transform: translateY(0); opacity:1; }
+    .card { background: white; border-radius: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .badge-present { background: #dcfce7; color: #16a34a; }
+    .badge-absent { background: #fee2e2; color: #dc2626; }
+    .badge-late { background: #fef3c7; color: #d97706; }
+    .pulse-ring {
+      animation: ring 2s ease-out infinite;
+    }
+    @keyframes ring {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-white font-semibold shadow-2xl text-sm whitespace-nowrap">
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- Header -->
+  <div class="header-bg text-white">
+    <div class="max-w-lg mx-auto px-4 pt-6 pb-10">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-full bg-orange-400 flex items-center justify-center font-bold text-xl" id="avatarLetter">E</div>
+          <div>
+            <div class="text-sm text-blue-200" id="greetingText">مرحباً</div>
+            <div class="font-bold text-base" id="workerName">...</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="text-right text-xs text-blue-200" id="currentTime"></div>
+          <button onclick="logout()" class="p-2 text-blue-200 hover:text-white transition" title="خروج">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- GPS Status -->
+      <div class="flex items-center gap-2 text-xs mb-1">
+        <span class="gps-dot gps-loading" id="gpsDot"></span>
+        <span id="gpsText" class="text-blue-200">جارٍ تحديد موقعك...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content (overlaps header) -->
+  <div class="max-w-lg mx-auto px-4 -mt-6 pb-8 space-y-4">
+
+    <!-- Check In/Out Card -->
+    <div class="card p-6 text-center">
+      <!-- Today Status -->
+      <div class="mb-5">
+        <div class="text-gray-500 text-sm mb-1">حالة اليوم</div>
+        <div id="todayStatusBadge" class="text-sm font-semibold text-gray-400">—</div>
+      </div>
+
+      <!-- Main Button -->
+      <div class="relative flex items-center justify-center mb-5">
+        <div class="absolute w-40 h-40 rounded-full opacity-20 pulse-ring" id="btnPulse" style="background:#16a34a"></div>
+        <button id="mainBtn" onclick="handleMainAction()"
+          class="btn-checkin relative w-36 h-36 rounded-full text-white font-bold text-lg flex flex-col items-center justify-center gap-1 disabled:btn-disabled">
+          <svg class="w-10 h-10" id="btnIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          <span id="btnText">تسجيل حضور</span>
+        </button>
+      </div>
+
+      <!-- Spinner -->
+      <div id="btnSpinner" class="hidden justify-center mb-4">
+        <svg class="animate-spin h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </div>
+
+      <!-- Today Details -->
+      <div class="grid grid-cols-3 gap-3 pt-4 border-t border-gray-100">
+        <div class="text-center">
+          <div class="text-xs text-gray-400 mb-1">وقت الحضور</div>
+          <div class="font-bold text-gray-700 text-sm" id="todayIn">—</div>
+        </div>
+        <div class="text-center border-x border-gray-100">
+          <div class="text-xs text-gray-400 mb-1">وقت الانصراف</div>
+          <div class="font-bold text-gray-700 text-sm" id="todayOut">—</div>
+        </div>
+        <div class="text-center">
+          <div class="text-xs text-gray-400 mb-1">ساعات العمل</div>
+          <div class="font-bold text-orange-500 text-sm" id="todayHours">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Stats -->
+    <div class="card p-5">
+      <h3 class="font-bold text-gray-700 mb-4 text-sm">إحصائيات الشهر</h3>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-blue-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-blue-600" id="statHours">—</div>
+          <div class="text-xs text-blue-400 mt-1">إجمالي الساعات</div>
+        </div>
+        <div class="bg-green-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-green-600" id="statDays">—</div>
+          <div class="text-xs text-green-400 mt-1">أيام العمل</div>
+        </div>
+        <div class="bg-red-50 rounded-xl p-3 text-center">
+          <div class="text-2xl font-bold text-red-500" id="statAbsent">—</div>
+          <div class="text-xs text-red-400 mt-1">أيام الغياب</div>
+        </div>
+      </div>
+      <div id="avgCheckin" class="mt-3 text-center text-xs text-gray-400 hidden">
+        متوسط وقت الحضور: <span id="avgTime" class="font-bold text-gray-600"></span>
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="font-bold text-gray-700 text-sm">سجل الحضور (آخر 30 يوم)</h3>
+        <button onclick="loadHistory()" class="text-xs text-blue-500 hover:underline">تحديث</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-right px-4 py-2 font-semibold text-gray-500">التاريخ</th>
+              <th class="text-right px-4 py-2 font-semibold text-gray-500">الحضور</th>
+              <th class="text-right px-4 py-2 font-semibold text-gray-500">الانصراف</th>
+              <th class="text-right px-4 py-2 font-semibold text-gray-500">الساعات</th>
+              <th class="text-right px-4 py-2 font-semibold text-gray-500">الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="historyTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/config.js"></script>
+  <script>
+    // ─── Globals ─────────────────────────────────────────────────────────────
+    const API = API_BASE;
+    let token = localStorage.getItem('token');
+    let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+    let userCoords = null;
+    let todayRecord = null;
+    let gpsReady = false;
+
+    // ─── Auth Guard ──────────────────────────────────────────────────────────
+    if (!token || !currentUser || currentUser.role !== 'worker') {
+      window.location.href = '/';
+    }
+
+    // ─── Toast ───────────────────────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      const m = document.getElementById('toast-msg');
+      t.className = `fixed top-5 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl text-white font-semibold shadow-2xl text-sm whitespace-nowrap ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+      m.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    // ─── API helper ──────────────────────────────────────────────────────────
+    async function api(method, path, body) {
+      const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(API + path, opts);
+      // Guard against non-JSON responses or empty bodies
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (res.status === 401) logout();
+      return { ok: res.ok, status: res.status, success: res.ok, ...data };
+    }
+
+    // ─── Logout ──────────────────────────────────────────────────────────────
+    function logout() {
+      localStorage.clear();
+      window.location.href = '/';
+    }
+
+    // ─── Greeting & Time ─────────────────────────────────────────────────────
+    function updateTime() {
+      const now = new Date();
+      const hours = now.getHours();
+      let greeting = hours < 12 ? 'صباح الخير' : hours < 18 ? 'مساء الخير' : 'مساء النور';
+      document.getElementById('greetingText').textContent = greeting;
+      document.getElementById('currentTime').innerHTML = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+        + '<br/>' + now.toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
+    }
+
+    // ─── Format helpers ───────────────────────────────────────────────────────
+    function fmtTime(dt) {
+      if (!dt) return '—';
+      return new Date(dt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    }
+    function fmtDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', weekday: 'short' });
+    }
+    function badgeStatus(s) {
+      if (!s) return `<span class="badge-absent text-xs px-2 py-0.5 rounded-full font-semibold">غائب</span>`;
+      const map = { present: ['badge-present', 'حاضر'], absent: ['badge-absent', 'غائب'], late: ['badge-late', 'متأخر'] };
+      const [cls, label] = map[s] || ['badge-absent', 'غائب'];
+      return `<span class="${cls} text-xs px-2 py-0.5 rounded-full font-semibold">${label}</span>`;
+    }
+
+    // ─── GPS ─────────────────────────────────────────────────────────────────
+    function initGPS() {
+      if (!navigator.geolocation) {
+        setGpsStatus('error', 'المتصفح لا يدعم GPS');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          gpsReady = true;
+          setGpsStatus('on', `تم تحديد موقعك ✓`);
+          updateButton();
+        },
+        (err) => {
+          setGpsStatus('error', 'تعذر تحديد موقعك - تأكد من تفعيل GPS');
+          updateButton();
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    function setGpsStatus(state, msg) {
+      const dot = document.getElementById('gpsDot');
+      const txt = document.getElementById('gpsText');
+      dot.className = 'gps-dot ' + (state === 'on' ? 'gps-on' : state === 'error' ? 'gps-off' : 'gps-loading');
+      txt.textContent = msg;
+    }
+
+    // ─── Update Button State ──────────────────────────────────────────────────
+    function updateButton() {
+      const btn = document.getElementById('mainBtn');
+      const btnText = document.getElementById('btnText');
+      const btnIcon = document.getElementById('btnIcon');
+      const btnPulse = document.getElementById('btnPulse');
+
+      const completed = todayRecord && todayRecord.check_in && todayRecord.check_out;
+      const checkedIn = todayRecord && todayRecord.check_in && !todayRecord.check_out;
+
+      if (completed) {
+        // Day done
+        btn.className = 'btn-disabled relative w-36 h-36 rounded-full text-white font-bold text-lg flex flex-col items-center justify-center gap-1';
+        btnText.textContent = 'تم الانصراف';
+        btnPulse.style.display = 'none';
+        btnIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>`;
+        document.getElementById('todayStatusBadge').innerHTML = badgeStatus(todayRecord.status);
+      } else if (checkedIn) {
+        // Need to check out
+        btn.className = 'btn-checkout relative w-36 h-36 rounded-full text-white font-bold text-lg flex flex-col items-center justify-center gap-1';
+        btnText.textContent = 'تسجيل انصراف';
+        btnPulse.style.background = '#ef4444';
+        btnPulse.style.display = 'block';
+        btnIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>`;
+        document.getElementById('todayStatusBadge').innerHTML = `<span class="badge-present text-xs px-2 py-0.5 rounded-full font-semibold">حاضر</span>`;
+      } else {
+        // Not checked in
+        btn.className = 'btn-checkin relative w-36 h-36 rounded-full text-white font-bold text-lg flex flex-col items-center justify-center gap-1';
+        btnText.textContent = 'تسجيل حضور';
+        btnPulse.style.background = '#16a34a';
+        btnPulse.style.display = 'block';
+        btnIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>`;
+        document.getElementById('todayStatusBadge').textContent = 'لم تسجل حضورك بعد';
+      }
+
+      // Disable if GPS not ready and not completed
+      if (!completed && !gpsReady) {
+        btn.disabled = true;
+      } else {
+        btn.disabled = !!completed;
+      }
+    }
+
+    // ─── Load Today Status ────────────────────────────────────────────────────
+    async function loadTodayStatus() {
+      const res = await api('GET', '/api/worker/status');
+      if (res.success) {
+        todayRecord = res.data;
+        if (todayRecord) {
+          document.getElementById('todayIn').textContent = fmtTime(todayRecord.check_in);
+          document.getElementById('todayOut').textContent = fmtTime(todayRecord.check_out);
+          document.getElementById('todayHours').textContent = todayRecord.hours_worked ? todayRecord.hours_worked + 'h' : '—';
+        }
+      }
+      updateButton();
+    }
+
+    // ─── Load Stats ───────────────────────────────────────────────────────────
+    async function loadStats() {
+      const res = await api('GET', '/api/worker/stats');
+      if (res.success) {
+        const d = res.data;
+        document.getElementById('statHours').textContent = d.totalHoursThisMonth + 'h';
+        document.getElementById('statDays').textContent = d.workingDaysThisMonth;
+        document.getElementById('statAbsent').textContent = d.absencesThisMonth;
+        if (d.avgCheckInTime) {
+          document.getElementById('avgCheckin').classList.remove('hidden');
+          document.getElementById('avgTime').textContent = d.avgCheckInTime;
+        }
+      }
+    }
+
+    // ─── Load History ─────────────────────────────────────────────────────────
+    async function loadHistory() {
+      const res = await api('GET', '/api/worker/history');
+      if (!res.success) return;
+      const tbody = document.getElementById('historyTable');
+      if (!res.data.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">لا يوجد سجلات</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = res.data.map(r => `
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-2.5 text-gray-700">${fmtDate(r.date)}</td>
+          <td class="px-4 py-2.5 text-gray-600">${fmtTime(r.check_in)}</td>
+          <td class="px-4 py-2.5 text-gray-600">${fmtTime(r.check_out)}</td>
+          <td class="px-4 py-2.5 font-semibold text-orange-500">${r.hours_worked != null ? r.hours_worked + 'h' : '—'}</td>
+          <td class="px-4 py-2.5">${badgeStatus(r.status)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ─── Handle Check In / Out ────────────────────────────────────────────────
+    async function handleMainAction() {
+      if (!gpsReady || !userCoords) {
+        showToast('يرجى تفعيل GPS أولاً', 'error');
+        initGPS();
+        return;
+      }
+
+      const btn = document.getElementById('mainBtn');
+      const spinner = document.getElementById('btnSpinner');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      spinner.style.display = 'flex';
+
+      const isCheckout = todayRecord && todayRecord.check_in && !todayRecord.check_out;
+      const endpoint = isCheckout ? '/api/worker/checkout' : '/api/worker/checkin';
+
+      try {
+        const res = await api('POST', endpoint, {
+          latitude: userCoords.latitude,
+          longitude: userCoords.longitude,
+        });
+
+        if (res.success) {
+          todayRecord = res.data;
+          showToast(res.message || (isCheckout ? 'تم تسجيل الانصراف ✓' : 'تم تسجيل الحضور ✓'));
+          document.getElementById('todayIn').textContent = fmtTime(todayRecord.check_in);
+          document.getElementById('todayOut').textContent = fmtTime(todayRecord.check_out);
+          document.getElementById('todayHours').textContent = todayRecord.hours_worked ? todayRecord.hours_worked + 'h' : '—';
+          loadStats();
+          loadHistory();
+        } else {
+          // Show detailed error — if geofence issue, show distance
+          let errMsg = res.message || 'حدث خطأ';
+          if (res.data && res.data.distanceMeters) {
+            errMsg = `أنت على بُعد ${res.data.distanceMeters}م من أقرب موقع (مسموح ${res.data.allowedRadiusMeters}م)`;
+          }
+          showToast(errMsg, 'error');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        // Network/parse error — reload from server to get real state
+        // (registration might have succeeded even if response parsing failed)
+        showToast('جارٍ التحقق من حالة الحضور...', 'error');
+        await loadTodayStatus();   // this updates todayRecord and button state
+        loadStats();
+        loadHistory();
+      }
+
+      spinner.classList.add('hidden');
+      spinner.style.display = 'none';
+      updateButton();
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    function init() {
+      if (currentUser) {
+        document.getElementById('workerName').textContent = currentUser.name || currentUser.username;
+        document.getElementById('avatarLetter').textContent = (currentUser.name || 'E')[0];
+      }
+      updateTime();
+      setInterval(updateTime, 60000);
+      initGPS();
+      loadTodayStatus();
+      loadStats();
+      loadHistory();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: intime-attendance-backend
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    disk:
+      name: attendance-db
+      mountPath: /opt/render/project/src/database
+      sizeGB: 1

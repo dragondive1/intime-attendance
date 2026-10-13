@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة تحكم الأدمن - نظام الحضور</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Cairo', sans-serif; }
+    :root {
+      --primary: #1e3a5f;
+      --accent: #f97316;
+    }
+    .sidebar { background: linear-gradient(180deg, #1e3a5f 0%, #0f2340 100%); }
+    .nav-item { transition: all 0.25s ease; cursor: pointer; }
+    .nav-item:hover, .nav-item.active {
+      background: rgba(249,115,22,0.2);
+      border-right: 3px solid #f97316;
+      color: #f97316;
+    }
+    .nav-item.active { color: #f97316; }
+    .stat-card { transition: transform 0.2s; }
+    .stat-card:hover { transform: translateY(-3px); }
+    .section { display: none; }
+    .section.active { display: block; }
+    #toast {
+      transition: all 0.3s ease;
+      transform: translateY(-20px); opacity: 0; pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    .table-row:hover { background: #f8fafc; }
+    .badge-present { background: #dcfce7; color: #16a34a; }
+    .badge-absent { background: #fee2e2; color: #dc2626; }
+    .badge-late { background: #fef3c7; color: #d97706; }
+    .badge-active { background: #dbeafe; color: #1d4ed8; }
+    .badge-inactive { background: #f1f5f9; color: #64748b; }
+    .overlay { background: rgba(0,0,0,0.5); }
+    .modal { max-height: 90vh; overflow-y: auto; }
+    .btn-primary { background: linear-gradient(135deg,#f97316,#ea580c); }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-danger { background: #ef4444; }
+    .btn-danger:hover { background: #dc2626; }
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(100%); position: fixed; z-index: 40; top: 0; right: 0; height: 100vh; transition: transform 0.3s; }
+      #sidebar.open { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-xl text-white font-semibold shadow-2xl text-sm whitespace-nowrap">
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar w-64 min-h-screen flex flex-col text-white shadow-2xl">
+    <!-- Logo -->
+    <div class="p-6 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white font-bold text-lg">H</div>
+        <div>
+          <div class="font-bold text-sm">نظام الحضور</div>
+          <div class="text-xs text-blue-200">لوحة الإدارة</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin info -->
+    <div class="px-4 py-4 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-orange-400 flex items-center justify-center text-white font-bold text-sm" id="sidebarAvatar">م</div>
+        <div>
+          <div class="font-semibold text-sm" id="sidebarName">المدير</div>
+          <div class="text-xs text-blue-300">مدير النظام</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 p-3 space-y-1">
+      <div class="nav-item active rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="dashboard">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        الرئيسية
+      </div>
+      <div class="nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="workers">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        إدارة العمال
+      </div>
+      <div class="nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="manual">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        تسجيل حضور يدوي
+      </div>
+      <div class="nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="attendance">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        تقارير الحضور
+      </div>
+      <div class="nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="shifts">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        إدارة الشيفتات
+      </div>
+      <div class="nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold" data-section="locations">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        إعدادات الموقع
+      </div>
+    </nav>
+
+    <!-- Logout -->
+    <div class="p-3 border-t border-white/10">
+      <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-300 hover:bg-red-500/20 text-sm font-semibold transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        تسجيل الخروج
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="flex-1 flex flex-col min-h-screen">
+
+    <!-- Top Bar -->
+    <header class="bg-white shadow-sm px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+      <div class="flex items-center gap-4">
+        <button id="menuBtn" class="md:hidden p-2 rounded-lg hover:bg-gray-100" onclick="toggleSidebar()">
+          <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div>
+          <h1 class="font-bold text-gray-800 text-lg" id="pageTitle">لوحة الرئيسية</h1>
+          <p class="text-xs text-gray-400" id="pageDate"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="refreshData()" class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="تحديث">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Area -->
+    <main class="flex-1 p-6">
+
+      <!-- ═══ DASHBOARD SECTION ══════════════════════════════════════════════ -->
+      <div id="sec-dashboard" class="section active">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="stat-card bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              </div>
+            </div>
+            <div class="text-3xl font-bold text-gray-800" id="stat-total">—</div>
+            <div class="text-sm text-gray-500 mt-1">إجمالي العمال</div>
+          </div>
+          <div class="stat-card bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+            </div>
+            <div class="text-3xl font-bold text-green-600" id="stat-present">—</div>
+            <div class="text-sm text-gray-500 mt-1">حاضرين اليوم</div>
+          </div>
+          <div class="stat-card bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+            </div>
+            <div class="text-3xl font-bold text-red-500" id="stat-absent">—</div>
+            <div class="text-sm text-gray-500 mt-1">غائبون اليوم</div>
+          </div>
+          <div class="stat-card bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
+                <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+            </div>
+            <div class="text-3xl font-bold text-orange-500" id="stat-avg">—</div>
+            <div class="text-sm text-gray-500 mt-1">متوسط ساعات الشهر</div>
+          </div>
+        </div>
+
+        <!-- Today's Attendance Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-bold text-gray-800">حضور اليوم</h2>
+            <button onclick="markAbsent()" class="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-semibold">تسجيل غياب تلقائي</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-right px-6 py-3 font-semibold text-gray-600">العامل</th>
+                  <th class="text-right px-6 py-3 font-semibold text-gray-600">وقت الحضور</th>
+                  <th class="text-right px-6 py-3 font-semibold text-gray-600">وقت الانصراف</th>
+                  <th class="text-right px-6 py-3 font-semibold text-gray-600">ساعات العمل</th>
+                  <th class="text-right px-6 py-3 font-semibold text-gray-600">الحالة</th>
+                  <th class="text-center px-6 py-3 font-semibold text-gray-600">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="todayTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ WORKERS SECTION ═══════════════════════════════════════════════ -->
+      <div id="sec-workers" class="section">
+        <div class="grid lg:grid-cols-3 gap-6">
+          <!-- Add Worker Form -->
+          <div class="lg:col-span-1">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h2 class="font-bold text-gray-800 mb-5 text-base">إضافة عامل جديد</h2>
+              <form id="addWorkerForm" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">الاسم الكامل</label>
+                  <input type="text" id="w-name" placeholder="مثال: أحمد محمد"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم</label>
+                  <input type="text" id="w-username" placeholder="مثال: ahmed123"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور</label>
+                  <input type="password" id="w-password" placeholder="على الأقل 6 أحرف"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+                <button type="submit" class="btn-primary w-full py-2.5 rounded-xl text-white font-bold text-sm">
+                  + إضافة العامل
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Workers Table -->
+          <div class="lg:col-span-2">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div class="px-6 py-4 border-b border-gray-100">
+                <h2 class="font-bold text-gray-800">قائمة العمال</h2>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th class="text-right px-4 py-3 font-semibold text-gray-600">الاسم</th>
+                      <th class="text-right px-4 py-3 font-semibold text-gray-600">المستخدم</th>
+                      <th class="text-right px-4 py-3 font-semibold text-gray-600">الشيفت</th>
+                      <th class="text-right px-4 py-3 font-semibold text-gray-600">الحالة</th>
+                      <th class="text-right px-4 py-3 font-semibold text-gray-600">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="workersTable"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ATTENDANCE REPORTS SECTION ══════════════════════════════════ -->
+      <div id="sec-attendance" class="section">
+        <!-- Filters -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">العامل</label>
+              <select id="f-worker" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                <option value="">جميع العمال</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">الشهر</label>
+              <select id="f-month" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                <option value="1">يناير</option><option value="2">فبراير</option><option value="3">مارس</option>
+                <option value="4">أبريل</option><option value="5">مايو</option><option value="6">يونيو</option>
+                <option value="7">يوليو</option><option value="8">أغسطس</option><option value="9">سبتمبر</option>
+                <option value="10">أكتوبر</option><option value="11">نوفمبر</option><option value="12">ديسمبر</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">السنة</label>
+              <select id="f-year" class="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"></select>
+            </div>
+            <button onclick="loadAttendance()" class="btn-primary py-2.5 px-5 rounded-xl text-white font-bold text-sm">
+              بحث
+            </button>
+          </div>
+        </div>
+
+        <!-- Worker Stats Card (shown when worker selected) -->
+        <div id="workerStatsCard" class="hidden bg-gradient-to-r from-blue-900 to-blue-700 rounded-2xl p-5 mb-5 text-white">
+          <h3 class="font-bold mb-3" id="wsc-name">إحصائيات العامل</h3>
+          <div class="grid grid-cols-3 gap-4 text-center">
+            <div><div class="text-2xl font-bold" id="wsc-hours">—</div><div class="text-xs text-blue-200">إجمالي الساعات</div></div>
+            <div><div class="text-2xl font-bold text-green-300" id="wsc-present">—</div><div class="text-xs text-blue-200">أيام الحضور</div></div>
+            <div><div class="text-2xl font-bold text-red-300" id="wsc-absent">—</div><div class="text-xs text-blue-200">أيام الغياب</div></div>
+          </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-bold text-gray-800">سجلات الحضور</h2>
+            <button onclick="exportData()" class="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 font-semibold transition">
+              تصدير JSON
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">العامل</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">التاريخ</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الحضور</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الانصراف</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الساعات</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الحالة</th>
+                  <th class="text-center px-4 py-3 font-semibold text-gray-600">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="attendanceTable"></tbody>
+            </table>
+          </div>
+          <div id="attSummary" class="px-6 py-4 bg-gray-50 border-t border-gray-100 hidden">
+            <div class="flex gap-6 text-sm font-semibold text-gray-700">
+              <span>أيام الحضور: <span id="sum-present" class="text-green-600">0</span></span>
+              <span>أيام الغياب: <span id="sum-absent" class="text-red-500">0</span></span>
+              <span>إجمالي الساعات: <span id="sum-hours" class="text-blue-600">0</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ MANUAL ATTENDANCE SECTION ════════════════════════════════════════ -->
+      <div id="sec-manual" class="section">
+
+        <!-- Quick Entry Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 class="font-bold text-gray-800 mb-1">تسجيل / تعديل حضور عامل</h2>
+          <p class="text-sm text-gray-400 mb-5">يمكنك تسجيل أو تعديل حضور أي عامل بشكل يدوي لأي تاريخ</p>
+
+          <form id="manualAttendanceForm" class="grid md:grid-cols-2 gap-4">
+            <!-- Worker selector -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">العامل <span class="text-red-400">*</span></label>
+              <select id="ma-worker" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required>
+                <option value="">اختر عاملاً...</option>
+              </select>
+            </div>
+
+            <!-- Date -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">التاريخ <span class="text-red-400">*</span></label>
+              <input type="date" id="ma-date" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+            </div>
+
+            <!-- Shift selector -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">الشيفت</label>
+              <select id="ma-shift" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                <option value="">بدون شيفت محدد</option>
+              </select>
+            </div>
+
+            <!-- Status -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">الحالة</label>
+              <select id="ma-status" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                <option value="present">حاضر ✅</option>
+                <option value="late">متأخر 🕐</option>
+                <option value="absent">غائب ❌</option>
+              </select>
+            </div>
+
+            <!-- Check-in time -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">وقت الحضور</label>
+              <input type="time" id="ma-checkin" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+
+            <!-- Check-out time -->
+            <div>
+              <label class="block text-sm font-semibold text-gray-600 mb-1">وقت الانصراف</label>
+              <input type="time" id="ma-checkout" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+
+            <!-- Notes -->
+            <div class="md:col-span-2">
+              <label class="block text-sm font-semibold text-gray-600 mb-1">ملاحظات</label>
+              <input type="text" id="ma-notes" placeholder="اختياري..." class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+
+            <!-- Auto-fill from shift button -->
+            <div class="md:col-span-2 flex gap-3 flex-wrap">
+              <button type="button" onclick="fillFromShift()"
+                class="border-2 border-blue-500 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-50 transition">
+                ⚡ ملء وقت الشيفت تلقائياً
+              </button>
+              <button type="submit" class="btn-primary px-8 py-2 rounded-xl text-white font-bold text-sm flex-1 md:flex-none">
+                💾 حفظ السجل
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Today quick view -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+            <h2 class="font-bold text-gray-800">سجلات الحضور</h2>
+            <div class="flex items-center gap-2">
+              <input type="date" id="ma-view-date" class="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              <button onclick="loadManualView()" class="btn-primary px-4 py-2 rounded-xl text-white text-sm font-bold">عرض</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">العامل</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الشيفت</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الحضور</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الانصراف</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الساعات</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">الحالة</th>
+                  <th class="text-right px-4 py-3 font-semibold text-gray-600">المصدر</th>
+                  <th class="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody id="manualViewTable">
+                <tr><td colspan="8" class="text-center py-10 text-gray-400">اختر تاريخاً ثم اضغط عرض</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SHIFTS SECTION ═════════════════════════════════════════════════ -->
+      <div id="sec-shifts" class="section">
+        <div class="grid lg:grid-cols-2 gap-6">
+
+          <!-- Add Shift Form -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 class="font-bold text-gray-800 mb-5">إضافة شيفت جديد</h2>
+            <form id="addShiftForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">اسم الشيفت</label>
+                <input type="text" id="sh-name" placeholder="مثال: شيفت صباحي"
+                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">النوع</label>
+                  <select id="sh-type" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="morning">🌅 صباحي</option>
+                    <option value="evening">🌆 مسائي</option>
+                    <option value="custom">⚙️ مخصص</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">فترة السماح (دقيقة)</label>
+                  <input type="number" id="sh-late" value="15" min="0" max="120"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">وقت البداية</label>
+                  <input type="time" id="sh-start"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">وقت النهاية</label>
+                  <input type="time" id="sh-end"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">لون الشيفت</label>
+                <div class="flex items-center gap-3">
+                  <input type="color" id="sh-color" value="#3b82f6" class="h-10 w-16 rounded-lg border-2 border-gray-200 cursor-pointer" />
+                  <div class="flex gap-2">
+                    <button type="button" onclick="document.getElementById('sh-color').value='#3b82f6'" class="w-7 h-7 rounded-full bg-blue-500 border-2 border-transparent hover:border-gray-400"></button>
+                    <button type="button" onclick="document.getElementById('sh-color').value='#f97316'" class="w-7 h-7 rounded-full bg-orange-500 border-2 border-transparent hover:border-gray-400"></button>
+                    <button type="button" onclick="document.getElementById('sh-color').value='#8b5cf6'" class="w-7 h-7 rounded-full bg-purple-500 border-2 border-transparent hover:border-gray-400"></button>
+                    <button type="button" onclick="document.getElementById('sh-color').value='#10b981'" class="w-7 h-7 rounded-full bg-emerald-500 border-2 border-transparent hover:border-gray-400"></button>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary w-full py-2.5 rounded-xl text-white font-bold text-sm">+ إضافة الشيفت</button>
+            </form>
+          </div>
+
+          <!-- Shifts List -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+              <h2 class="font-bold text-gray-800">الشيفتات المسجلة</h2>
+            </div>
+            <div id="shiftsList" class="p-4 space-y-3">
+              <div class="text-center py-8 text-gray-400 text-sm">جارٍ التحميل...</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══ LOCATIONS SECTION ══════════════════════════════════════════════ -->
+      <div id="sec-locations" class="section">
+
+        <!-- Geofence Toggle Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h2 class="font-bold text-gray-800 text-base">التحقق من الموقع الجغرافي (Geofence)</h2>
+              <p class="text-sm text-gray-500 mt-1">عند التفعيل، يجب أن يكون العامل داخل النطاق المحدد لتسجيل الحضور</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span id="geofenceStatusText" class="text-sm font-semibold text-gray-500">جارٍ التحميل...</span>
+              <button id="geofenceToggleBtn" onclick="toggleGeofence()"
+                class="relative inline-flex h-8 w-16 items-center rounded-full transition-colors duration-300 focus:outline-none bg-gray-300"
+                aria-label="تفعيل/تعطيل الجيوفنس">
+                <span id="geofenceThumb"
+                  class="inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-300 translate-x-1"></span>
+              </button>
+            </div>
+          </div>
+          <div id="geofenceWarning" class="hidden mt-3 text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl px-4 py-2">
+            ⚠️ التحقق من الموقع معطّل حالياً — يمكن لأي عامل تسجيل الحضور بغض النظر عن موقعه
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-6">
+          <!-- Add Location Form -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h2 class="font-bold text-gray-800 mb-5">إضافة موقع جديد</h2>
+            <form id="addLocForm" class="space-y-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">اسم الموقع</label>
+                <input type="text" id="l-name" placeholder="مثال: الهايبر الرئيسي"
+                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">خط العرض (Latitude)</label>
+                  <input type="number" step="any" id="l-lat" placeholder="30.0444"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-gray-600 mb-1">خط الطول (Longitude)</label>
+                  <input type="number" step="any" id="l-lng" placeholder="31.2357"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-600 mb-1">نطاق الجغرافي (بالمتر)</label>
+                <input type="number" id="l-radius" placeholder="150" value="150"
+                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+              </div>
+              <div class="flex gap-3">
+                <button type="button" onclick="getCurrentLocation()" class="flex-1 border-2 border-blue-500 text-blue-600 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-50 transition">
+                  📍 موقعي الحالي
+                </button>
+                <button type="submit" class="btn-primary flex-1 py-2.5 rounded-xl text-white font-bold text-sm">
+                  + إضافة
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Locations List -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+              <h2 class="font-bold text-gray-800">مناطق النطاق الجغرافي</h2>
+            </div>
+            <div id="locationsList" class="p-4 space-y-3"></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═══ EDIT WORKER MODAL ══════════════════════════════════════════════════ -->
+  <div id="editModal" class="hidden fixed inset-0 overlay z-50 flex items-center justify-center p-4">
+    <div class="modal bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h3 class="font-bold text-gray-800 text-lg mb-5">تعديل بيانات العامل</h3>
+      <form id="editWorkerForm" class="space-y-4">
+        <input type="hidden" id="edit-id" />
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">الاسم</label>
+          <input type="text" id="edit-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم المستخدم</label>
+          <input type="text" id="edit-username" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">كلمة المرور الجديدة (اتركها فارغة إن لم تريد تغييرها)</label>
+          <input type="password" id="edit-password" placeholder="••••••" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="edit-active" class="w-4 h-4 accent-blue-600" />
+          <label for="edit-active" class="text-sm font-semibold text-gray-600">مفعّل</label>
+        </div>
+        <div class="flex gap-3 mt-2">
+          <button type="button" onclick="closeEditModal()" class="flex-1 border-2 border-gray-300 text-gray-600 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50">إلغاء</button>
+          <button type="submit" class="btn-primary flex-1 py-2.5 rounded-xl text-white font-bold text-sm">حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ EDIT LOCATION MODAL ════════════════════════════════════════════════ -->
+  <div id="editLocModal" class="hidden fixed inset-0 overlay z-50 flex items-center justify-center p-4">
+    <div class="modal bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <h3 class="font-bold text-gray-800 text-lg mb-5">تعديل الموقع</h3>
+      <form id="editLocForm" class="space-y-4">
+        <input type="hidden" id="eloc-id" />
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">اسم الموقع</label>
+          <input type="text" id="eloc-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-semibold text-gray-600 mb-1">خط العرض</label>
+            <input type="number" step="any" id="eloc-lat" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-600 mb-1">خط الطول</label>
+            <input type="number" step="any" id="eloc-lng" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-600 mb-1">نطاق الجغرافي (بالمتر)</label>
+          <input type="number" id="eloc-radius" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" required />
+        </div>
+        <div class="flex gap-3">
+          <button type="button" onclick="closeLocModal()" class="flex-1 border-2 border-gray-300 text-gray-600 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50">إلغاء</button>
+          <button type="submit" class="btn-primary flex-1 py-2.5 rounded-xl text-white font-bold text-sm">حفظ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/config.js"></script>
+  <script>
+    // ─── Globals ─────────────────────────────────────────────────────────────
+    const API = API_BASE;
+    let token = localStorage.getItem('token');
+    let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+    let allWorkers = [];
+
+    // ─── Auth Guard ──────────────────────────────────────────────────────────
+    if (!token || !currentUser || currentUser.role !== 'admin') {
+      window.location.href = '/';
+    }
+
+    // ─── Toast ───────────────────────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      const m = document.getElementById('toast-msg');
+      t.className = `fixed top-5 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-xl text-white font-semibold shadow-2xl text-sm whitespace-nowrap ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+      m.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    // ─── API helper ──────────────────────────────────────────────────────────
+    async function api(method, path, body) {
+      const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(API + path, opts);
+      const data = await res.json();
+      if (res.status === 401) { logout(); }
+      return data;
+    }
+
+    // ─── Sidebar & Navigation ─────────────────────────────────────────────
+    const titles = {
+      dashboard: 'لوحة الرئيسية',
+      workers: 'إدارة العمال',
+      manual: 'تسجيل حضور يدوي',
+      attendance: 'تقارير الحضور',
+      shifts: 'إدارة الشيفتات',
+      locations: 'إعدادات الموقع'
+    };
+
+    document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+      item.addEventListener('click', () => {
+        const sec = item.dataset.section;
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('sec-' + sec).classList.add('active');
+        document.getElementById('pageTitle').textContent = titles[sec];
+        if (sec === 'dashboard') loadDashboard();
+        if (sec === 'workers') loadWorkers();
+        if (sec === 'manual') loadManualSection();
+        if (sec === 'attendance') { populateWorkerFilter(); loadAttendance(); }
+        if (sec === 'shifts') loadShifts();
+        if (sec === 'locations') loadLocations();
+        // Close sidebar on mobile
+        document.getElementById('sidebar').classList.remove('open');
+      });
+    });
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    // ─── Logout ──────────────────────────────────────────────────────────────
+    function logout() {
+      localStorage.clear();
+      window.location.href = '/';
+    }
+
+    // ─── Format helpers ───────────────────────────────────────────────────────
+    function fmtTime(dt) {
+      if (!dt) return '—';
+      return new Date(dt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    }
+    function fmtDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    function badgeStatus(s) {
+      if (!s) return `<span class="badge-absent text-xs px-2 py-0.5 rounded-full font-semibold">غائب</span>`;
+      const map = { present: ['badge-present', 'حاضر'], absent: ['badge-absent', 'غائب'], late: ['badge-late', 'متأخر'] };
+      const [cls, label] = map[s] || ['badge-absent', 'غائب'];
+      return `<span class="${cls} text-xs px-2 py-0.5 rounded-full font-semibold">${label}</span>`;
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    function init() {
+      // Set user info
+      if (currentUser) {
+        document.getElementById('sidebarName').textContent = currentUser.name || 'المدير';
+        document.getElementById('sidebarAvatar').textContent = (currentUser.name || 'م')[0];
+      }
+      // Set date
+      document.getElementById('pageDate').textContent = new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      // Set year filter options
+      const yr = document.getElementById('f-year');
+      const now = new Date();
+      for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        if (y === now.getFullYear()) opt.selected = true;
+        yr.appendChild(opt);
+      }
+      document.getElementById('f-month').value = now.getMonth() + 1;
+
+      loadDashboard();
+    }
+
+    // ─── DASHBOARD ────────────────────────────────────────────────────────────
+    async function loadDashboard() {
+      const [statsRes, workersRes] = await Promise.all([
+        api('GET', '/api/admin/stats'),
+        api('GET', '/api/admin/workers'),
+      ]);
+
+      if (statsRes.success) {
+        const s = statsRes.data;
+        document.getElementById('stat-total').textContent = s.totalWorkers;
+        document.getElementById('stat-present').textContent = s.presentToday;
+        document.getElementById('stat-absent').textContent = s.absentToday;
+        document.getElementById('stat-avg').textContent = s.avgHoursThisMonth + 'h';
+      }
+
+      if (workersRes.success) {
+        const tbody = document.getElementById('todayTable');
+        if (!workersRes.data.length) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400">لا يوجد بيانات</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = workersRes.data.map(w => {
+          const deleteBtn = w.attendance_id
+            ? `<button onclick="deleteAttendanceRecordGeneral(${w.attendance_id}, 'dashboard')" class="text-xs bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg font-semibold transition" title="حذف هذا السجل">🗑️ حذف</button>`
+            : `<span class="text-xs text-gray-300">—</span>`;
+          return `
+            <tr class="table-row border-b border-gray-50">
+              <td class="px-6 py-3 font-semibold text-gray-800">${w.name}</td>
+              <td class="px-6 py-3 text-gray-600">${fmtTime(w.check_in)}</td>
+              <td class="px-6 py-3 text-gray-600">${fmtTime(w.check_out)}</td>
+              <td class="px-6 py-3 text-gray-600">${w.hours_worked ? w.hours_worked + 'h' : '—'}</td>
+              <td class="px-6 py-3">${badgeStatus(w.attendance_status)}</td>
+              <td class="px-6 py-3 text-center">${deleteBtn}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    async function markAbsent() {
+      if (!confirm('هل تريد تسجيل غياب جميع العمال الذين لم يسجلوا حضورهم اليوم؟')) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await api('POST', '/api/admin/attendance/mark-absent', { date: today });
+      if (res.success) { showToast(res.message); loadDashboard(); }
+      else showToast(res.message, 'error');
+    }
+
+    // ─── WORKERS ─────────────────────────────────────────────────────────────
+    async function loadWorkers() {
+      // Load shifts and workers in parallel
+      const [workersRes, shiftsRes] = await Promise.all([
+        api('GET', '/api/admin/workers'),
+        api('GET', '/api/admin/shifts'),
+      ]);
+      if (!workersRes.success) return;
+      allWorkers = workersRes.data;
+      if (shiftsRes.success) shiftsCache = shiftsRes.data;
+
+      const shifts = shiftsRes.success ? shiftsRes.data.filter(s => s.is_active) : [];
+
+      const tbody = document.getElementById('workersTable');
+      if (!workersRes.data.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400">لا يوجد عمال</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = workersRes.data.map(w => {
+        // Build shift selector options
+        const shiftOptions = shifts.map(s =>
+          `<option value="${s.id}" ${w.shift_id == s.id ? 'selected' : ''}>${s.name} (${s.start_time}–${s.end_time})</option>`
+        ).join('');
+        const shiftBadge = w.shift_id && w.shift_name
+          ? `<span class="text-xs px-2 py-0.5 rounded-full text-white font-semibold" style="background:${w.shift_color}">${w.shift_name}</span>`
+          : `<span class="text-xs text-gray-400">—</span>`;
+        return `
+          <tr class="table-row border-b border-gray-50" id="wrow-${w.id}">
+            <td class="px-4 py-3 font-semibold text-gray-800">${w.name}</td>
+            <td class="px-4 py-3 text-gray-500 text-xs">${w.username}</td>
+            <td class="px-4 py-3" id="wshift-${w.id}">
+              <div class="flex items-center gap-2">
+                ${shiftBadge}
+                <select onchange="assignShift(${w.id}, this.value)"
+                  class="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-400 bg-white">
+                  <option value="">بدون شيفت</option>
+                  ${shiftOptions}
+                </select>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <span class="${w.is_active ? 'badge-active' : 'badge-inactive'} text-xs px-2 py-0.5 rounded-full font-semibold">
+                ${w.is_active ? 'مفعّل' : 'موقوف'}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex gap-2">
+                <button onclick="openEditModal(${w.id})" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-semibold transition">تعديل</button>
+                <button onclick="deleteWorker(${w.id})" class="text-xs bg-red-50 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-100 font-semibold transition">حذف</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function assignShift(workerId, shiftId) {
+      const res = await api('PUT', `/api/admin/workers/${workerId}/shift`, {
+        shift_id: shiftId ? parseInt(shiftId) : null
+      });
+      if (res.success) {
+        showToast(res.message + ' ✓');
+        // Update the badge in-place without full reload
+        const shift = shiftsCache.find(s => s.id == shiftId);
+        const cell = document.getElementById(`wshift-${workerId}`);
+        if (cell) {
+          const badge = cell.querySelector('span');
+          if (badge) {
+            if (shift) {
+              badge.style.background = shift.color;
+              badge.className = 'text-xs px-2 py-0.5 rounded-full text-white font-semibold';
+              badge.textContent = shift.name;
+            } else {
+              badge.style.background = '';
+              badge.className = 'text-xs text-gray-400';
+              badge.textContent = '—';
+            }
+          }
+        }
+      } else {
+        showToast(res.message || 'فشل تعيين الشيفت', 'error');
+      }
+    }
+
+    document.getElementById('addWorkerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('w-name').value.trim();
+      const username = document.getElementById('w-username').value.trim();
+      const password = document.getElementById('w-password').value;
+      const res = await api('POST', '/api/admin/workers', { name, username, password });
+      if (res.success) {
+        showToast('تم إضافة العامل بنجاح ✓');
+        e.target.reset();
+        loadWorkers();
+      } else showToast(res.message, 'error');
+    });
+
+    function openEditModal(id) {
+      const w = allWorkers.find(x => x.id === id);
+      if (!w) return;
+      document.getElementById('edit-id').value = w.id;
+      document.getElementById('edit-name').value = w.name;
+      document.getElementById('edit-username').value = w.username;
+      document.getElementById('edit-password').value = '';
+      document.getElementById('edit-active').checked = !!w.is_active;
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    function closeEditModal() { document.getElementById('editModal').classList.add('hidden'); }
+
+    document.getElementById('editWorkerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-id').value;
+      const name = document.getElementById('edit-name').value.trim();
+      const username = document.getElementById('edit-username').value.trim();
+      const password = document.getElementById('edit-password').value || undefined;
+      const is_active = document.getElementById('edit-active').checked;
+      const res = await api('PUT', `/api/admin/workers/${id}`, { name, username, password, is_active });
+      if (res.success) {
+        showToast('تم تحديث بيانات العامل ✓');
+        closeEditModal();
+        loadWorkers();
+      } else showToast(res.message, 'error');
+    });
+
+    async function deleteWorker(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا العامل؟ سيتم حذف جميع سجلات حضوره أيضاً')) return;
+      const res = await api('DELETE', `/api/admin/workers/${id}`);
+      if (res.success) { showToast('تم حذف العامل ✓'); loadWorkers(); }
+      else showToast(res.message, 'error');
+    }
+
+    // ─── ATTENDANCE ──────────────────────────────────────────────────────────
+    async function populateWorkerFilter() {
+      if (allWorkers.length === 0) {
+        const res = await api('GET', '/api/admin/workers');
+        if (res.success) allWorkers = res.data;
+      }
+      const sel = document.getElementById('f-worker');
+      sel.innerHTML = '<option value="">جميع العمال</option>';
+      allWorkers.forEach(w => {
+        const o = document.createElement('option');
+        o.value = w.id; o.textContent = w.name;
+        sel.appendChild(o);
+      });
+    }
+
+    async function loadAttendance() {
+      const uid = document.getElementById('f-worker').value;
+      const month = document.getElementById('f-month').value;
+      const year = document.getElementById('f-year').value;
+
+      let url = `/api/admin/attendance?month=${month}&year=${year}`;
+      if (uid) url += `&user_id=${uid}`;
+
+      const res = await api('GET', url);
+      if (!res.success) return;
+
+      const tbody = document.getElementById('attendanceTable');
+      const records = res.data;
+
+      if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-gray-400">لا توجد سجلات لهذه الفترة</td></tr>`;
+        document.getElementById('attSummary').classList.add('hidden');
+        document.getElementById('workerStatsCard').classList.add('hidden');
+        return;
+      }
+
+      tbody.innerHTML = records.map(r => `
+        <tr class="table-row border-b border-gray-50">
+          <td class="px-4 py-3 font-semibold text-gray-800">${r.worker_name || '—'}</td>
+          <td class="px-4 py-3 text-gray-600">${fmtDate(r.date)}</td>
+          <td class="px-4 py-3 text-gray-600">${fmtTime(r.check_in)}</td>
+          <td class="px-4 py-3 text-gray-600">${fmtTime(r.check_out)}</td>
+          <td class="px-4 py-3 text-gray-600">${r.hours_worked != null ? r.hours_worked + 'h' : '—'}</td>
+          <td class="px-4 py-3">${badgeStatus(r.status)}</td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="deleteAttendanceRecordGeneral(${r.id}, 'attendance')" class="text-xs bg-red-50 text-red-500 hover:bg-red-100 px-2.5 py-1 rounded-lg font-semibold transition" title="حذف هذا السجل">🗑️ حذف</button>
+          </td>
+        </tr>
+      `).join('');
+
+      // Summary
+      const totalHours = records.reduce((s, r) => s + (r.hours_worked || 0), 0);
+      const daysPresent = records.filter(r => r.status !== 'absent').length;
+      const daysAbsent = records.filter(r => r.status === 'absent').length;
+      document.getElementById('sum-present').textContent = daysPresent;
+      document.getElementById('sum-absent').textContent = daysAbsent;
+      document.getElementById('sum-hours').textContent = totalHours.toFixed(2);
+      document.getElementById('attSummary').classList.remove('hidden');
+
+      // Worker stats card
+      if (uid) {
+        const wsRes = await api('GET', `/api/admin/worker-stats/${uid}?month=${month}&year=${year}`);
+        if (wsRes.success) {
+          const d = wsRes.data.currentMonth;
+          document.getElementById('workerStatsCard').classList.remove('hidden');
+          document.getElementById('wsc-name').textContent = `إحصائيات: ${wsRes.data.worker.name}`;
+          document.getElementById('wsc-hours').textContent = d.totalHours + 'h';
+          document.getElementById('wsc-present').textContent = d.daysPresent;
+          document.getElementById('wsc-absent').textContent = d.daysAbsent;
+        }
+      } else {
+        document.getElementById('workerStatsCard').classList.add('hidden');
+      }
+    }
+
+    async function deleteAttendanceRecordGeneral(id, source = 'dashboard') {
+      if (!confirm('هل أنت متأكد من حذف ساعات/سجل الحضور هذا؟ لن يمكن التراجع عن هذه الخطوة.')) return;
+      const res = await api('DELETE', `/api/admin/attendance/${id}`);
+      if (res.success) {
+        showToast(res.message || 'تم حذف السجل بنجاح ✓');
+        if (source === 'dashboard') {
+          loadDashboard();
+        } else if (source === 'attendance') {
+          loadAttendance();
+        } else if (source === 'manual') {
+          loadManualView();
+        }
+      } else {
+        showToast(res.message || 'فشل حذف السجل', 'error');
+      }
+    }
+
+    async function exportData() {
+      const month = document.getElementById('f-month').value;
+      const year = document.getElementById('f-year').value;
+      const res = await api('GET', `/api/admin/export/monthly/${year}/${month}`);
+      if (res.success) {
+        const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-${year}-${String(month).padStart(2, '0')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('تم تصدير البيانات بنجاح ✓');
+      } else showToast(res.message, 'error');
+    }
+
+    // ─── LOCATIONS ────────────────────────────────────────────────────────────
+    let geofenceEnabled = true;
+
+    async function loadLocations() {
+      // Load geofence setting
+      const settRes = await api('GET', '/api/admin/settings');
+      if (settRes.success) {
+        geofenceEnabled = settRes.data.geofence_enabled === 'true';
+        updateGeofenceUI();
+      }
+
+      // Load locations list
+      const res = await api('GET', '/api/admin/locations');
+      if (!res.success) return;
+      const container = document.getElementById('locationsList');
+      if (!res.data.length) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-400 text-sm">لا توجد مواقع مسجلة</div>`;
+        return;
+      }
+      container.innerHTML = res.data.map(loc => `
+        <div class="border-2 border-gray-100 rounded-xl p-4 hover:border-blue-200 transition">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-bold text-gray-800">${loc.name}</div>
+              <div class="text-xs text-gray-500 mt-1">
+                📍 ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}<br/>
+                📏 نطاق: ${loc.radius_meters} متر
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="openLocModal(${loc.id})" class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-semibold">تعديل</button>
+              <button onclick="deleteLocation(${loc.id})" class="text-xs bg-red-50 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-100 font-semibold">حذف</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('addLocForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('l-name').value.trim();
+      const latitude = document.getElementById('l-lat').value;
+      const longitude = document.getElementById('l-lng').value;
+      const radius_meters = document.getElementById('l-radius').value;
+      const res = await api('POST', '/api/admin/locations', { name, latitude, longitude, radius_meters });
+      if (res.success) {
+        showToast('تم إضافة الموقع بنجاح ✓');
+        e.target.reset();
+        document.getElementById('l-radius').value = 150;
+        loadLocations();
+      } else showToast(res.message, 'error');
+    });
+
+    let locationsCache = [];
+    async function openLocModal(id) {
+      const res = await api('GET', '/api/admin/locations');
+      if (res.success) locationsCache = res.data;
+      const loc = locationsCache.find(l => l.id === id);
+      if (!loc) return;
+      document.getElementById('eloc-id').value = loc.id;
+      document.getElementById('eloc-name').value = loc.name;
+      document.getElementById('eloc-lat').value = loc.latitude;
+      document.getElementById('eloc-lng').value = loc.longitude;
+      document.getElementById('eloc-radius').value = loc.radius_meters;
+      document.getElementById('editLocModal').classList.remove('hidden');
+    }
+
+    function closeLocModal() { document.getElementById('editLocModal').classList.add('hidden'); }
+
+    document.getElementById('editLocForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('eloc-id').value;
+      const name = document.getElementById('eloc-name').value.trim();
+      const latitude = document.getElementById('eloc-lat').value;
+      const longitude = document.getElementById('eloc-lng').value;
+      const radius_meters = document.getElementById('eloc-radius').value;
+      const res = await api('PUT', `/api/admin/locations/${id}`, { name, latitude, longitude, radius_meters });
+      if (res.success) {
+        showToast('تم تحديث الموقع ✓');
+        closeLocModal();
+        loadLocations();
+      } else showToast(res.message, 'error');
+    });
+
+    async function deleteLocation(id) {
+      if (!confirm('هل أنت متأكد من حذف هذا الموقع؟')) return;
+      const res = await api('DELETE', `/api/admin/locations/${id}`);
+      if (res.success) { showToast('تم حذف الموقع ✓'); loadLocations(); }
+      else showToast(res.message, 'error');
+    }
+
+    function updateGeofenceUI() {
+      const btn = document.getElementById('geofenceToggleBtn');
+      const thumb = document.getElementById('geofenceThumb');
+      const statusText = document.getElementById('geofenceStatusText');
+      const warning = document.getElementById('geofenceWarning');
+
+      if (geofenceEnabled) {
+        btn.classList.remove('bg-gray-300');
+        btn.classList.add('bg-green-500');
+        thumb.classList.remove('translate-x-1');
+        thumb.classList.add('translate-x-9');
+        statusText.textContent = 'مفعّل ✓';
+        statusText.className = 'text-sm font-semibold text-green-600';
+        warning.classList.add('hidden');
+      } else {
+        btn.classList.remove('bg-green-500');
+        btn.classList.add('bg-gray-300');
+        thumb.classList.remove('translate-x-9');
+        thumb.classList.add('translate-x-1');
+        statusText.textContent = 'معطّل';
+        statusText.className = 'text-sm font-semibold text-red-500';
+        warning.classList.remove('hidden');
+      }
+    }
+
+    async function toggleGeofence() {
+      const newState = !geofenceEnabled;
+      const res = await api('PUT', '/api/admin/settings/geofence', { enabled: newState });
+      if (res.success) {
+        geofenceEnabled = newState;
+        updateGeofenceUI();
+        showToast(res.message);
+      } else {
+        showToast(res.message || 'حدث خطأ', 'error');
+      }
+    }
+
+    function getCurrentLocation() {
+      if (!navigator.geolocation) {
+        showToast('المتصفح لا يدعم تحديد الموقع', 'error');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('l-lat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('l-lng').value = pos.coords.longitude.toFixed(6);
+          showToast('تم تحديد موقعك بنجاح 📍');
+        },
+        () => showToast('تعذر الحصول على موقعك', 'error')
+      );
+    }
+
+    // ─── SHIFTS ───────────────────────────────────────────────────────────────
+    let shiftsCache = [];
+
+    async function loadShifts() {
+      const res = await api('GET', '/api/admin/shifts');
+      if (!res.success) return;
+      shiftsCache = res.data;
+      renderShiftsList(res.data);
+      // Also populate shift dropdowns in manual section
+      populateShiftDropdowns(res.data);
+    }
+
+    function shiftTypeLabel(type) {
+      return { morning: '🌅 صباحي', evening: '🌆 مسائي', custom: '⚙️ مخصص' }[type] || type;
+    }
+
+    function renderShiftsList(shifts) {
+      const container = document.getElementById('shiftsList');
+      if (!shifts.length) {
+        container.innerHTML = `<div class="text-center py-8 text-gray-400 text-sm">لا توجد شيفتات مسجلة</div>`;
+        return;
+      }
+      container.innerHTML = shifts.map(s => `
+        <div class="border-2 border-gray-100 rounded-xl p-4 hover:border-blue-100 transition">
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-4 h-12 rounded-full flex-shrink-0" style="background:${s.color}"></div>
+              <div>
+                <div class="font-bold text-gray-800">${s.name}</div>
+                <div class="text-xs text-gray-500 mt-0.5">${shiftTypeLabel(s.type)}</div>
+                <div class="text-xs text-gray-500">🕐 ${s.start_time} — ${s.end_time} &nbsp;|&nbsp; فترة سماح: ${s.late_after_minutes} دقيقة</div>
+              </div>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <button onclick="openEditShiftModal(${s.id})"
+                class="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 font-semibold">تعديل</button>
+              <button onclick="deleteShift(${s.id})"
+                class="text-xs bg-red-50 text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-100 font-semibold">حذف</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function populateShiftDropdowns(shifts) {
+      const sel = document.getElementById('ma-shift');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">بدون شيفت محدد</option>';
+      shifts.filter(s => s.is_active).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = `${s.name} (${s.start_time}–${s.end_time})`;
+        sel.appendChild(o);
+      });
+    }
+
+    document.getElementById('addShiftForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        name: document.getElementById('sh-name').value.trim(),
+        type: document.getElementById('sh-type').value,
+        start_time: document.getElementById('sh-start').value,
+        end_time: document.getElementById('sh-end').value,
+        late_after_minutes: document.getElementById('sh-late').value,
+        color: document.getElementById('sh-color').value,
+      };
+      const res = await api('POST', '/api/admin/shifts', body);
+      if (res.success) {
+        showToast('تم إضافة الشيفت ✓');
+        e.target.reset();
+        document.getElementById('sh-color').value = '#3b82f6';
+        document.getElementById('sh-late').value = '15';
+        loadShifts();
+      } else showToast(res.message, 'error');
+    });
+
+    function openEditShiftModal(id) {
+      const s = shiftsCache.find(x => x.id === id);
+      if (!s) return;
+      // Simple prompt-based edit (can be upgraded to modal later)
+      const newName = prompt('اسم الشيفت:', s.name);
+      if (newName === null) return;
+      const newStart = prompt('وقت البداية (HH:MM):', s.start_time);
+      if (newStart === null) return;
+      const newEnd = prompt('وقت النهاية (HH:MM):', s.end_time);
+      if (newEnd === null) return;
+      const newLate = prompt('فترة السماح (دقيقة):', s.late_after_minutes);
+      if (newLate === null) return;
+      api('PUT', `/api/admin/shifts/${id}`, {
+        name: newName, start_time: newStart, end_time: newEnd, late_after_minutes: parseInt(newLate)
+      }).then(res => {
+        if (res.success) { showToast('تم تحديث الشيفت ✓'); loadShifts(); }
+        else showToast(res.message, 'error');
+      });
+    }
+
+    async function deleteShift(id) {
+      if (!confirm('هل تريد حذف هذا الشيفت؟')) return;
+      const res = await api('DELETE', `/api/admin/shifts/${id}`);
+      if (res.success) { showToast('تم حذف الشيفت ✓'); loadShifts(); }
+      else showToast(res.message, 'error');
+    }
+
+    // ─── MANUAL ATTENDANCE ────────────────────────────────────────────────────
+    async function loadManualSection() {
+      // Load workers and shifts for dropdowns
+      const [wRes, sRes] = await Promise.all([
+        api('GET', '/api/admin/workers'),
+        api('GET', '/api/admin/shifts'),
+      ]);
+      if (wRes.success) {
+        allWorkers = wRes.data;
+        const sel = document.getElementById('ma-worker');
+        sel.innerHTML = '<option value="">اختر عاملاً...</option>';
+        wRes.data.forEach(w => {
+          const o = document.createElement('option');
+          o.value = w.id; o.textContent = w.name;
+          sel.appendChild(o);
+        });
+      }
+      if (sRes.success) {
+        shiftsCache = sRes.data;
+        populateShiftDropdowns(sRes.data);
+      }
+      // Default date to today
+      document.getElementById('ma-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('ma-view-date').value = new Date().toISOString().slice(0, 10);
+      await loadManualView();
+    }
+
+    function fillFromShift() {
+      const shiftId = document.getElementById('ma-shift').value;
+      if (!shiftId) { showToast('اختر شيفتاً أولاً', 'error'); return; }
+      const shift = shiftsCache.find(s => s.id == shiftId);
+      if (!shift) return;
+      document.getElementById('ma-checkin').value = shift.start_time;
+      document.getElementById('ma-checkout').value = shift.end_time;
+      showToast(`تم ملء وقت "${shift.name}" تلقائياً`);
+    }
+
+    document.getElementById('manualAttendanceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        user_id: document.getElementById('ma-worker').value,
+        date: document.getElementById('ma-date').value,
+        shift_id: document.getElementById('ma-shift').value || null,
+        check_in_time: document.getElementById('ma-checkin').value || null,
+        check_out_time: document.getElementById('ma-checkout').value || null,
+        status: document.getElementById('ma-status').value,
+        notes: document.getElementById('ma-notes').value.trim() || null,
+      };
+      if (!body.user_id || !body.date) {
+        showToast('يرجى اختيار العامل والتاريخ', 'error'); return;
+      }
+      const res = await api('POST', '/api/admin/attendance/manual', body);
+      if (res.success) {
+        showToast(res.message + ' ✓');
+        // Reload the view table
+        document.getElementById('ma-view-date').value = body.date;
+        await loadManualView();
+      } else showToast(res.message, 'error');
+    });
+
+    async function loadManualView() {
+      const date = document.getElementById('ma-view-date').value;
+      if (!date) return;
+      const res = await api('GET', `/api/admin/attendance?month=${date.slice(5,7)}&year=${date.slice(0,4)}`);
+      const tbody = document.getElementById('manualViewTable');
+      if (!res.success) return;
+
+      // Filter to selected date only
+      const records = res.data.filter(r => r.date === date);
+
+      if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-gray-400">لا توجد سجلات لهذا اليوم</td></tr>`;
+        return;
+      }
+
+      // Build shift name lookup
+      const shiftMap = {};
+      shiftsCache.forEach(s => shiftMap[s.id] = s);
+
+      tbody.innerHTML = records.map(r => {
+        const shift = r.shift_id && shiftMap[r.shift_id];
+        const shiftBadge = shift
+          ? `<span class="text-xs px-2 py-0.5 rounded-full text-white font-semibold" style="background:${shift.color}">${shift.name}</span>`
+          : `<span class="text-xs text-gray-400">—</span>`;
+        const sourceBadge = r.added_by
+          ? `<span class="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-semibold">يدوي</span>`
+          : `<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">ذاتي</span>`;
+        return `
+          <tr class="table-row border-b border-gray-50">
+            <td class="px-4 py-3 font-semibold text-gray-800">${r.worker_name || '—'}</td>
+            <td class="px-4 py-3">${shiftBadge}</td>
+            <td class="px-4 py-3 text-gray-600">${fmtTime(r.check_in)}</td>
+            <td class="px-4 py-3 text-gray-600">${fmtTime(r.check_out)}</td>
+            <td class="px-4 py-3 font-semibold text-orange-500">${r.hours_worked != null ? r.hours_worked + 'h' : '—'}</td>
+            <td class="px-4 py-3">${badgeStatus(r.status)}</td>
+            <td class="px-4 py-3">${sourceBadge}</td>
+            <td class="px-4 py-3">
+              <button onclick="deleteAttendanceRecord(${r.id})"
+                class="text-xs bg-red-50 text-red-500 px-2 py-1 rounded-lg hover:bg-red-100 font-semibold">حذف</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function deleteAttendanceRecord(id) {
+      if (!confirm('هل تريد حذف هذا السجل؟')) return;
+      const res = await api('DELETE', `/api/admin/attendance/${id}`);
+      if (res.success) { showToast('تم حذف السجل ✓'); loadManualView(); }
+      else showToast(res.message, 'error');
+    }
+
+    function refreshData() {
+      const active = document.querySelector('.nav-item.active');
+      if (active) active.click();
+    }
+
+    // ─── Start ────────────────────────────────────────────────────────────────
+    init();
+  </script>
+</body>
+</html>
